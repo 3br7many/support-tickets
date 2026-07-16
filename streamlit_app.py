@@ -43,7 +43,7 @@ if submitted and email:
     st.session_state.df = pd.concat([pd.DataFrame([new_ticket]), st.session_state.df], axis=0)
     
     # ربط Power Automate (ضع رابط الـ Webhook الخاص بك هنا)
-    webhook_url = "YOUR_POWER_AUTOMATE_WEBHOOK_URL"
+    webhook_url = https://defaulte2a3de6f89e24f578064e4a0661b86.f9.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/23/workflows/c88a09eb95dd4ac98dc075a293e4a842/triggers/manual/paths/invoke?api-version=1
     requests.post(webhook_url, json=new_ticket)
     st.success("Ticket submitted and notification sent!")
 
