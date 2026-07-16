@@ -2,54 +2,67 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import datetime
-import requests
 
-st.set_page_config(page_title="IT Support System", page_icon="🎫")
-st.title("🎫 IT Support System")
+# إعداد الصفحة
+st.set_page_config(page_title="IT Support System", page_icon="🎫", layout="wide")
+st.title("🎫 IT Support System - Erada Finance")
 
-# تهيئة البيانات
+# تهيئة البيانات (في حالة عدم وجود بيانات)
 if "df" not in st.session_state:
     st.session_state.df = pd.DataFrame({
-        "ID": [f"TICKET-{i}" for i in range(1100, 1090, -1)],
-        "UserEmail": ["user@erada.com"] * 10,
-        "Issue": ["Example issue"] * 10,
-        "Status": ["Open"] * 10,
-        "Assignee": ["Unassigned"] * 10
+        "ID": ["TICKET-1001"],
+        "UserEmail": ["admin@erada.com"],
+        "Issue": ["Welcome to the system"],
+        "Status": ["Open"],
+        "Assignee": ["Abdelrahman Younes"]
     })
 
-# Sidebar للفلترة
+# --- الشريط الجانبي (Sidebar) ---
 st.sidebar.header("Filters")
-assignee_filter = st.sidebar.selectbox("Filter by Assignee", ["All", "Ahmed", "Mohamed", "Sara", "Unassigned"])
+# استخراج الأسماء الفريدة من الجدول عشان الفلتر يكون ديناميكي
+all_assignees = ["All"] + list(st.session_state.df["Assignee"].unique())
+selected_assignee = st.sidebar.selectbox("Filter by Assignee", all_assignees)
 
-# عرض التيكتس بناءً على الفلتر
-df_display = st.session_state.df
-if assignee_filter != "All":
-    df_display = df_display[df_display["Assignee"] == assignee_filter]
+# --- قسم إضافة تيكت جديدة ---
+with st.expander("➕ Add New Ticket"):
+    with st.form("add_ticket_form", clear_on_submit=True):
+        email = st.text_input("Your Work Email")
+        issue = st.text_area("Describe the issue")
+        submitted = st.form_submit_button("Submit")
 
-# فورم إضافة تيكت جديدة
-with st.form("add_ticket_form"):
-    email = st.text_input("Your Work Email")
-    issue = st.text_area("Describe the issue")
-    submitted = st.form_submit_button("Submit")
-
-if submitted and email:
-    new_ticket = {
-        "ID": f"TICKET-{int(st.session_state.df.ID.str.split('-').str[1].max()) + 1}",
+if submitted and email and issue:
+    new_id = f"TICKET-{len(st.session_state.df) + 1001}"
+    new_ticket = pd.DataFrame([{
+        "ID": new_id,
         "UserEmail": email,
         "Issue": issue,
         "Status": "Open",
-        "Assignee": "Unassigned"
-    }
-    st.session_state.df = pd.concat([pd.DataFrame([new_ticket]), st.session_state.df], axis=0)
-    
-    # ربط Power Automate (ضع رابط الـ Webhook الخاص بك هنا)
-    webhook_url = "https://defaulte2a3de6f89e24f578064e4a0661b86.f9.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/23/workflows/c88a09eb95dd4ac98dc075a293e4a842/triggers/manual/paths/invoke?api-version=1"
-    requests.post(webhook_url, json=new_ticket)
-    st.success("Ticket submitted and notification sent!")
+        "Assignee": "Abdelrahman Younes"
+    }])
+    st.session_state.df = pd.concat([new_ticket, st.session_state.df], ignore_index=True)
+    st.success(f"Ticket {new_id} submitted successfully!")
 
-# تعديل التيكتس
-edited_df = st.data_editor(df_display, use_container_width=True, column_config={
-    "Status": st.column_config.SelectboxColumn(options=["Open", "In Progress", "Closed"]),
-    "Assignee": st.column_config.SelectboxColumn(options=["Ahmed", "Mohamed", "Sara", "Unassigned"])
-})
+# --- عرض الجدول ---
+st.header("Existing tickets")
+# تطبيق الفلتر
+df_display = st.session_state.df
+if selected_assignee != "All":
+    df_display = df_display[df_display["Assignee"] == selected_assignee]
+
+edited_df = st.data_editor(
+    df_display,
+    use_container_width=True,
+    column_config={
+        "Status": st.column_config.SelectboxColumn(options=["Open", "In Progress", "Closed"]),
+        "Assignee": st.column_config.SelectboxColumn(options=["Abdelrahman Younes"]) # اسمك هنا
+    }
+)
+
+# تحديث البيانات الأصلية بعد التعديل
 st.session_state.df.update(edited_df)
+
+# --- الإحصائيات ---
+st.header("Statistics")
+col1, col2 = st.columns(2)
+col1.metric("Total Tickets", len(st.session_state.df))
+col2.metric("Open Tickets", len(st.session_state.df[st.session_state.df["Status"] == "Open"]))
