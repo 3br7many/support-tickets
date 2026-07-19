@@ -5,13 +5,11 @@ import msal
 # 1. إعدادات الربط من الـ Secrets
 client_id = st.secrets["AZURE_CLIENT_ID"].strip()
 client_secret = st.secrets["AZURE_CLIENT_SECRET"].strip()
-tenant_id = st.secrets["AZURE_TENANT_ID"].strip()
+# سنستخدم 'common' بدلاً من الـ Tenant ID الخاص بك لتجنب خطأ الـ Configuration
+authority = "https://login.microsoftonline.com/common" 
 site_id = st.secrets["SHAREPOINT_SITE_ID"].strip()
 list_id = st.secrets["SHAREPOINT_LIST_ID"].strip()
 
-# 2. إعداد الـ Authentication - تم تعديل الـ Authority ليكون الرابط القياسي المباشر
-# بدلاً من استخدام f-string قد يحتوي على مسافات، نستخدم الرابط بشكل صريح
-authority = f"https://login.microsoftonline.com/{tenant_id}"
 scope = ["https://graph.microsoft.com/.default"]
 
 try:
@@ -24,7 +22,7 @@ except Exception as e:
     st.error(f"Error initializing MSAL: {e}")
     st.stop()
 
-# 3. واجهة التطبيق
+# 2. واجهة التطبيق
 st.title("Adaptiv IT Support System")
 
 issue = st.text_input("Issue Title")
@@ -44,7 +42,6 @@ if st.button("Submit Ticket"):
             "Content-Type": "application/json"
         }
         
-        # ربط البيانات بالأعمدة الموجودة في SharePoint
         payload = {
             "fields": {
                 "Title": issue,
