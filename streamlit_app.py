@@ -1,22 +1,42 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+from office365.sharepoint.client_context import ClientContext
+from office365.runtime.auth.user_credential import UserCredential
 
 # إعداد الصفحة
 st.set_page_config(page_title="IT Support System", page_icon="🎫", layout="wide")
 st.title("🎫 IT Support System - Adaptiv")
 
-# تهيئة جدول فارغ تماماً (لا توجد أي بيانات مسبقة)
+# إعدادات الشير بوينت
+SITE_URL = "https://netorgft1653627.sharepoint.com/sites/AbdelrahmanYounes"
+LIST_NAME = "SupportTickets"
+
+# دالة الحفظ المباشر في SharePoint
+def save_to_sharepoint(email, issue, assignee):
+    # ملاحظة: استخدم بياناتك هنا أو الأفضل st.secrets في Streamlit Cloud
+    # إذا كان هناك MFA، يفضل استخدام App Registration و Client ID/Secret
+    credentials = UserCredential("abdoyones74@gmail.com", "YOUR_PASSWORD")
+    ctx = ClientContext(SITE_URL).with_credentials(credentials)
+    
+    list_obj = ctx.web.lists.get_by_title(LIST_NAME)
+    item = list_obj.add_item()
+    item.set_property("Title", issue)
+    item.set_property("UserEmail", email)
+    item.set_property("Assignee", assignee)
+    item.set_property("Status", "Open")
+    item.update()
+    ctx.execute_query()
+
+# تهيئة جدول البيانات
 if "df" not in st.session_state:
-    st.session_state.df = pd.DataFrame(columns=["ID", "UserEmail", "Issue", "Status", "Assignee"])
+    st.session_state.df = pd.DataFrame(columns=["UserEmail", "Issue", "Status", "Assignee"])
 
-# --- الشريط الجانبي (Sidebar) ---
+# --- الشريط الجانبي ---
 st.sidebar.header("Filters")
-# استخراج الأسماء ديناميكياً
-assignee_list = ["All", "Abdelrahman Younes", "Unassigned"]
-selected_assignee = st.sidebar.selectbox("Filter by Assignee", assignee_list)
+selected_assignee = st.sidebar.selectbox("Filter by Assignee", ["All", "Abdelrahman Younes", "Unassigned"])
 
-# --- قسم إضافة تيكت جديدة ---
+# --- قسم إضافة تيكت ---
 with st.expander("➕ Add New Ticket"):
     with st.form("add_ticket_form", clear_on_submit=True):
         email = st.text_input("Your Work Email")
@@ -25,56 +45,29 @@ with st.expander("➕ Add New Ticket"):
         submitted = st.form_submit_button("Submit")
 
 if submitted and email and issue:
-    new_id = f"TICKET-{len(st.session_state.df) + 1001}"
-    new_ticket = pd.DataFrame([{
-        "ID": new_id,
-        "UserEmail": email,
-        "Issue": issue,
-        "Status": "Open",
-        "Assignee": assignee
-    }])
-    st.session_state.df = pd.concat([new_ticket, st.session_state.df], ignore_index=True)
-    st.success(f"Ticket {new_id} added successfully!")
-    st.rerun()
+    with st.spinner("Saving to SharePoint..."):
+        try:
+            save_to_sharepoint(email, issue, assignee)
+            new_ticket = pd.DataFrame([{"UserEmail": email, "Issue": issue, "Status": "Open", "Assignee": assignee}])
+            st.session_state.df = pd.concat([new_ticket, st.session_state.df], ignore_index=True)
+            st.success("Ticket saved successfully to SharePoint & Notification sent!")
+        except Exception as e:
+            st.error(f"Error: {e}")
 
-# --- عرض الجدول ---
+# --- عرض الجدول والرسوم البيانية ---
 st.header("Existing tickets")
 df_display = st.session_state.df
-
-# تطبيق الفلتر
 if selected_assignee != "All":
     df_display = df_display[df_display["Assignee"] == selected_assignee]
+st.data_editor(df_display, use_container_width=True)
 
-# عرض الجدول مع إمكانية التعديل
-edited_df = st.data_editor(
-    df_display, 
-    use_container_width=True,
-    column_config={
-        "Status": st.column_config.SelectboxColumn(options=["Open", "In Progress", "Closed"]),
-        "Assignee": st.column_config.SelectboxColumn(options=["Abdelrahman Younes", "Unassigned"])
-    }
-)
-st.session_state.df.update(edited_df)
-
-# --- الإحصائيات والجرافس ---
 st.header("Statistics")
 if not st.session_state.df.empty:
     col1, col2 = st.columns(2)
     col1.metric("Total Tickets", len(st.session_state.df))
     col2.metric("Open Tickets", len(st.session_state.df[st.session_state.df["Status"] == "Open"]))
-
-    # جراف الحالة (Status Chart) - شكل احترافي
-    st.write("### Ticket Status Overview")
-    chart_data = st.session_state.df["Status"].value_counts().reset_index()
-    chart_data.columns = ["Status", "Count"]
     
-    chart = alt.Chart(chart_data).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-        x=alt.X("Status", sort="-y"),
-        y="Count",
-        color="Status",
-        tooltip=["Status", "Count"]
-    ).properties(height=300)
-    
+    chart = alt.Chart(st.session_state.df["Status"].value_counts().reset_index()).mark_bar().encode(
+        x="Status", y="count", color="Status"
+    )
     st.altair_chart(chart, use_container_width=True)
-else:
-    st.info("No tickets to display yet. Add your first ticket to get started!")
