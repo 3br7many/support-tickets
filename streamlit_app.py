@@ -1,29 +1,26 @@
 import streamlit as st
 import pandas as pd
-from shareplum import Site
-from shareplum.auth.ntlm import NtlmSite
 
-# إعدادات الموقع
-SITE_URL = "https://netorgft1653627.sharepoint.com/sites/AbdelrahmanYounes"
-USERNAME = st.secrets["SHAREPOINT_USERNAME"]
-PASSWORD = st.secrets["SHAREPOINT_PASSWORD"]
-
+st.set_page_config(page_title="IT Support System", layout="wide")
 st.title("🎫 IT Support System - Adaptiv")
 
-with st.form("ticket_form"):
-    email = st.text_input("Your Work Email")
-    issue = st.text_area("Describe the issue")
-    submit = st.form_submit_button("Submit")
+if "df" not in st.session_state:
+    st.session_state.df = pd.DataFrame(columns=["UserEmail", "Issue", "Status"])
 
-if submit:
-    try:
-        # الاتصال بـ SharePoint
-        auth = NtlmSite(SITE_URL, username=USERNAME, password=PASSWORD)
-        sp_site = Site(SITE_URL, auth=auth)
-        sp_list = sp_site.List('SupportTickets')
-        
-        # إضافة التيكت
-        sp_list.update_list_items([{'Title': issue, 'UserEmail': email, 'Status': 'Open'}], None)
-        st.success("Ticket saved! The Flow will now trigger automatically.")
-    except Exception as e:
-        st.error(f"Error: {e}")
+with st.expander("➕ Add New Ticket"):
+    with st.form("ticket_form", clear_on_submit=True):
+        email = st.text_input("Your Work Email")
+        issue = st.text_area("Describe the issue")
+        submit = st.form_submit_button("Submit")
+
+if submit and email and issue:
+    new_row = pd.DataFrame([{"UserEmail": email, "Issue": issue, "Status": "Open"}])
+    st.session_state.df = pd.concat([new_row, st.session_state.df], ignore_index=True)
+    st.success("Ticket added locally! (Integration with SharePoint pending IT approval)")
+
+st.header("Existing tickets")
+st.table(st.session_state.df)
+
+# زر لتحميل البيانات كـ Excel لإرسالها للـ IT
+csv = st.session_state.df.to_csv(index=False)
+st.download_button("Download Tickets as CSV", data=csv, file_name="tickets.csv", mime="text/csv")
