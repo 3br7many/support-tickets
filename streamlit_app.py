@@ -1,26 +1,59 @@
 import streamlit as st
-import pandas as pd
+import requests
+import msal
 
-st.set_page_config(page_title="IT Support System", layout="wide")
-st.title("🎫 IT Support System - Adaptiv")
+# إعدادات الربط من الـ Secrets
+client_id = st.secrets["AZURE_CLIENT_ID"]
+client_secret = st.secrets["AZURE_CLIENT_SECRET"]
+tenant_id = st.secrets["AZURE_TENANT_ID"]
+site_id = st.secrets["SHAREPOINT_SITE_ID"]
+list_id = st.secrets["SHAREPOINT_LIST_ID"]
 
-if "df" not in st.session_state:
-    st.session_state.df = pd.DataFrame(columns=["UserEmail", "Issue", "Status"])
+# إعداد الـ Authentication
+authority = f"https://login.microsoftonline.com/{tenant_id}"
+scope = ["https://graph.microsoft.com/.default"]
 
-with st.expander("➕ Add New Ticket"):
-    with st.form("ticket_form", clear_on_submit=True):
-        email = st.text_input("Your Work Email")
-        issue = st.text_area("Describe the issue")
-        submit = st.form_submit_button("Submit")
+app = msal.ConfidentialClientApplication(
+    client_id, 
+    authority=authority, 
+    client_credential=client_secret
+)
 
-if submit and email and issue:
-    new_row = pd.DataFrame([{"UserEmail": email, "Issue": issue, "Status": "Open"}])
-    st.session_state.df = pd.concat([new_row, st.session_state.df], ignore_index=True)
-    st.success("Ticket added locally! (Integration with SharePoint pending IT approval)")
+# واجهة التطبيق
+st.title("Adaptiv IT Support System")
 
-st.header("Existing tickets")
-st.table(st.session_state.df)
+issue = st.text_input("Issue Title")
+user_email = st.text_input("Your Email")
+description = st.text_area("Description")
 
-# زر لتحميل البيانات كـ Excel لإرسالها للـ IT
-csv = st.session_state.df.to_csv(index=False)
-st.download_button("Download Tickets as CSV", data=csv, file_name="tickets.csv", mime="text/csv")
+if st.button("Submit Ticket"):
+    token_response = app.acquire_token_for_client(scopes=scope)
+    
+    if "access_token" in token_response:
+        token = token_response["access_token"]
+        url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items"
+        
+        headers = {
+            "Authorization": f"Bearer {token}", 
+            "Content-Type": "application/json"
+        }
+        
+        # ربط البيانات بالأعمدة الموجودة في SharePoint
+        payload = {
+            "fields": {
+                "Title": issue,         # هذا الحقل إجباري في SharePoint
+                "Issue": issue,         # العمود المخصص في الـ List
+                "UserEmail": user_email,
+                "Description": description,
+                "Status": "Open"        # حالة افتراضية للتيكت الجديد
+            }
+        }
+        
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code == 201:
+            st.success("Ticket saved to SharePoint successfully!")
+        else:
+            st.error(f"Error: {response.json()}")
+    else:
+        st.error("Authentication failed. Check your Secrets.")
